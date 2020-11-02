@@ -8,7 +8,7 @@ import byte_parser
 
 
 # For parsing c-structs like: '     __le32  s_inodes_count;     /* Inodes count */'
-STRUCT_LINE_RE = re.compile(r"^ +([a-z0-9_]+) +([a-z_]+); +\/\* (.*) \*\/$")
+STRUCT_LINE_RE = re.compile(r"^ +([a-z0-9_]+) +([a-z_]+)(?:\[([0-9]+)\])?; +\/\* (.*) \*\/$")
 
 # TODO: Parameterize this
 BLOCK_SIZE=0x400
@@ -59,10 +59,17 @@ class FileSystem:
             for line in f.read().split('\n'):
                 if not line:
                     continue
+                if line[0] == "#":
+                    continue
                 parsed_line = STRUCT_LINE_RE.match(line)
                 if parsed_line is None:
                     raise ValueError("Unexpected line in struct: %s" % (line,))
-                ret.append(parsed_line.groups())
+                ret.append({
+                    "type" : parsed_line.group(1),
+                    "var" : parsed_line.group(2),
+                    "length" : parsed_line.group(3),
+                    "comment" : parsed_line.group(4)
+                })
         return ret
 
     @staticmethod
@@ -80,55 +87,74 @@ class FileSystem:
         blocks = []
         state = "boot"
         with open(self.path, 'rb') as f:
-            blocks.append(EmptyBlock(f.read(0x400), None).init())
-            blocks.append(SuperBlock(f.read(0x400), self._structs["superblock"]).init())
+            blocks.append(Block(f.read(BLOCK_SIZE)))
+            blocks[0].make_empty_block()
+
+            blocks.append(Block(f.read(BLOCK_SIZE)))
+            blocks[1].make_super_block(self._structs["superblock"])
+
+            while True:
+                raw_bytes = f.read(BLOCK_SIZE)
+                if not raw_bytes:
+                    break
+                block = Block(raw_bytes)
+                if block.is_all_zeroes():
+                    block.make_empty_block()
+                blocks.append(block)
+
         self._blocks = blocks
+
+    def summarize(self):
+        for block in self._blocks:
+            sys.stdout.write(block.letter)
+        sys.stdout.write("\n")
 
 class Block:
 
     letter = '?'
 
-    def __init__(self, raw_bytes, struct):
-        self.struct = struct
+    def __init__(self, raw_bytes):
 
         self.raw_bytes = raw_bytes
 
-    def init(self):
-        return self
+    def make_super_block(self, struct):
+        self.letter ='S'
+        self.parse(struct)
 
-    def parse(self):
+    def make_empty_block(self):
+        self.letter = ' '
+        if not self.is_all_zeroes():
+            raise ValueError("Attempting to make empty block from non-zeroed block")
+
+    def parse(self, struct):
         ret = {}
         i = 0
-        for entry in self.struct:
-            if entry[0] == "__le16":
-                ret[entry[2]] = byte_parser.parse_16(self.raw_bytes[i:i+2])
+        for entry in struct:
+            if entry["type"] == "__le16":
+                ret[entry["comment"]] = byte_parser.parse_16(self.raw_bytes[i:i+2])
                 i+=2
-            elif entry[0] == "__le32":
-                ret[entry[2]] = byte_parser.parse_32(self.raw_bytes[i:i+4])
+            elif entry["type"] == "__le32":
+                ret[entry["comment"]] = byte_parser.parse_32(self.raw_bytes[i:i+4])
                 i+=4
+            elif entry["type"] == "uuid":
+                ret[entry["comment"]] = byte_parser.parse_uuid(self.raw_bytes[i:i+16])
+                i+=16
+            elif entry["type"] == "char":
+                length = int(entry["length"])
+                print(self.raw_bytes[i:i+length])
+                ret[entry["comment"]] = byte_parser.parse_char(self.raw_bytes[i:i+length])
+                i+=length
             else:
-                raise ValueError("Unexpected value %s" % (entry[0]))
+                raise ValueError("Unexpected value %s" % (entry["type"]))
         self.state = ret
 
     def summarize(self):
         print("Super block:")
         for k, v in self.state.items():
-            print("  %s: %s (%s)" % (k, v, hex(v)))
+            print("  %s: %s" % (k, v))
                         
-
-class SuperBlock(Block):
-
-    letter = 'S'
-
-    def init(self):
-        self.parse()
-        return self
-
-class EmptyBlock(Block):
-    letter = ' '
-
-    def init(self):
-        assert len(self.raw_bytes) == 1024
+    def is_all_zeroes(self):
         for byte in self.raw_bytes:
-            assert byte == 0
-        return self
+            if byte != 0:
+                return False
+        return True

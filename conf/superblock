@@ -1,3 +1,4 @@
+# From https://github.com/torvalds/linux/blob/master/fs/ext2/ext2.h#L416
     __le32  s_inodes_count;     /* Inodes count */
     __le32  s_blocks_count;     /* Blocks count */
     __le32  s_r_blocks_count;   /* Reserved blocks count */
@@ -23,3 +24,11 @@
     __le32  s_rev_level;        /* Revision level */
     __le16  s_def_resuid;       /* Default uid for reserved blocks */
     __le16  s_def_resgid;       /* Default gid for reserved blocks */
+    __le32  s_first_ino;        /* First non-reserved inode */
+    __le16   s_inode_size;      /* size of inode structure */
+    __le16  s_block_group_nr;   /* block group # of this superblock */
+    __le32  s_feature_compat;   /* compatible feature set */
+    __le32  s_feature_incompat;     /* incompatible feature set */
+    __le32  s_feature_ro_compat;    /* readonly-compatible feature set */
+# Edited this next line to parse the uuid better
+    uuid    s_uuid;     /* 128-bit uuid for volume */
