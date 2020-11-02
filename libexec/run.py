@@ -14,6 +14,8 @@ def show(section):
         filesystem.superblock.summarize()
     elif section == "summary":
         filesystem.summarize()
+    elif section == "group":
+        filesystem.group_desc.summarize()
     else:
         raise ValueError("Unexpected section %s" % (section))
 
@@ -30,7 +32,7 @@ def watch(section):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("section", choices=["summary", "superblock"])
+    parser.add_argument("section", choices=["summary", "superblock", "group"])
     parser.add_argument("action", choices=["show", "watch"])
     args = parser.parse_args()
 

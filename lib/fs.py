@@ -44,12 +44,18 @@ class FileSystem:
         self._blocks = []
 
         self._structs = {
-            "superblock" : self.parse_struct("conf/superblock")
+            "superblock" : self.parse_struct("conf/superblock"),
+            "group_desc" : self.parse_struct("conf/group_desc"),
         }
 
     @property
     def superblock(self):
         return self._blocks[1]
+
+    @property
+    def group_desc(self):
+        # There might be more than one group!
+        return self._blocks[2]
 
 
     @staticmethod
@@ -93,6 +99,9 @@ class FileSystem:
             blocks.append(Block(f.read(BLOCK_SIZE)))
             blocks[1].make_super_block(self._structs["superblock"])
 
+            blocks.append(Block(f.read(BLOCK_SIZE)))
+            blocks[2].make_group_desc_block(self._structs["group_desc"])
+
             while True:
                 raw_bytes = f.read(BLOCK_SIZE)
                 if not raw_bytes:
@@ -126,6 +135,10 @@ class Block:
         if not self.is_all_zeroes():
             raise ValueError("Attempting to make empty block from non-zeroed block")
 
+    def make_group_desc_block(self, struct):
+        self.letter = 'G'
+        self.parse(struct)
+
     def parse(self, struct):
         ret = {}
         i = 0
@@ -141,7 +154,6 @@ class Block:
                 i+=16
             elif entry["type"] == "char":
                 length = int(entry["length"])
-                print(self.raw_bytes[i:i+length])
                 ret[entry["comment"]] = byte_parser.parse_char(self.raw_bytes[i:i+length])
                 i+=length
             else:
@@ -149,7 +161,13 @@ class Block:
         self.state = ret
 
     def summarize(self):
-        print("Super block:")
+        if self.is_all_zeroes():
+            print("Empty block!")
+            return
+        if self.letter == 'S':
+            print("Super block:")
+        if self.letter == 'G':
+            print("Group description")
         for k, v in self.state.items():
             print("  %s: %s" % (k, v))
                         
