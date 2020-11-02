@@ -1,5 +1,5 @@
 ## readfs
-`readelf` takes an ELF binary and parses its internal binary structure and displays it. `readfs` does the same for filesystems
+`readefs` is inspired by `readelf`, which takes an ELF binary, parses its internal binary structure, and displays it. `readfs` does the same for filesystems
 
 ### Caveats
 1. Currently only implemented for ext2
